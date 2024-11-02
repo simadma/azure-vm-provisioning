@@ -1,131 +1,125 @@
-terraform {
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "=2.91.0"
-    }
-  }
+resource "random_pet" "rg_name" {
+  prefix = var.resource_group_name_prefix
 }
 
-provider "azurerm" {
-  features {}
+resource "azurerm_resource_group" "rg" {
+  location = var.resource_group_location
+  name     = random_pet.rg_name.id
 }
 
-variable "SSH_PUBLIC_KEY" {
-  type        = string
-  description = "The public key to use for SSH access"
+# Create virtual network
+resource "azurerm_virtual_network" "my_terraform_network" {
+  name                = "myVnet"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
 }
 
-resource "azurerm_resource_group" "mtc-rg" {
-  name     = "mtc-resources"
-  location = "Sweden Central"
-  tags = {
-    environment = "dev"
-  }
+# Create subnet
+resource "azurerm_subnet" "my_terraform_subnet" {
+  name                 = "mySubnet"
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.my_terraform_network.name
+  address_prefixes     = ["10.0.1.0/24"]
 }
 
-
-resource "azurerm_virtual_network" "mtc-vn" {
-  name                = "mtc-network"
-  resource_group_name = azurerm_resource_group.mtc-rg.name
-  location            = azurerm_resource_group.mtc-rg.location
-  address_space       = ["10.123.0.0/16"]
-
-  tags = {
-    environment = "dev"
-  }
-}
-
-
-resource "azurerm_subnet" "mtc-subnet" {
-  name                 = "mtc-subnet"
-  resource_group_name  = azurerm_resource_group.mtc-rg.name
-  virtual_network_name = azurerm_virtual_network.mtc-vn.name
-  address_prefixes     = ["10.123.1.0/24"]
-}
-
-resource "azurerm_network_security_group" "mtc-sg" {
-  name                = "mtc-sg"
-  location            = azurerm_resource_group.mtc-rg.location
-  resource_group_name = azurerm_resource_group.mtc-rg.name
-
-  tags = {
-    environment = "dev"
-  }
-}
-
-resource "azurerm_network_security_rule" "mtc-sr" {
-  name                        = "mtc-sr"
-  priority                    = 100
-  direction                   = "Inbound"
-  access                      = "Allow"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "*"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = azurerm_resource_group.mtc-rg.name
-  network_security_group_name = azurerm_network_security_group.mtc-sg.name
-}
-
-resource "azurerm_subnet_network_security_group_association" "mtc-sga" {
-  subnet_id                 = azurerm_subnet.mtc-subnet.id
-  network_security_group_id = azurerm_network_security_group.mtc-sg.id
-}
-
-resource "azurerm_public_ip" "mtc-ip" {
-  name                = "mtc-ip"
-  resource_group_name = azurerm_resource_group.mtc-rg.name
-  location            = azurerm_resource_group.mtc-rg.location
+# Create public IPs
+resource "azurerm_public_ip" "my_terraform_public_ip" {
+  name                = "myPublicIP"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
   allocation_method   = "Dynamic"
+}
 
-  tags = {
-    environment = "dev"
+# Create Network Security Group and rule
+resource "azurerm_network_security_group" "my_terraform_nsg" {
+  name                = "myNetworkSecurityGroup"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  security_rule {
+    name                       = "SSH"
+    priority                   = 1001
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
   }
 }
 
-resource "azurerm_network_interface" "mtc-nic" {
-  name                = "mtc-nic"
-  location            = azurerm_resource_group.mtc-rg.location
-  resource_group_name = azurerm_resource_group.mtc-rg.name
+# Create network interface
+resource "azurerm_network_interface" "my_terraform_nic" {
+  name                = "myNIC"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
 
   ip_configuration {
-    name                          = "internal"
-    subnet_id                     = azurerm_subnet.mtc-subnet.id
+    name                          = "my_nic_configuration"
+    subnet_id                     = azurerm_subnet.my_terraform_subnet.id
     private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.mtc-ip.id
-  }
-
-  tags = {
-    environment = "dev"
+    public_ip_address_id          = azurerm_public_ip.my_terraform_public_ip.id
   }
 }
 
-resource "azurerm_linux_virtual_machine" "mtc-vm" {
-  name                  = "mtc-vm"
-  resource_group_name   = azurerm_resource_group.mtc-rg.name
-  location              = azurerm_resource_group.mtc-rg.location
-  size                  = "Standard_B1s"
-  admin_username        = "adminuser"
-  network_interface_ids = [azurerm_network_interface.mtc-nic.id]
+# Connect the security group to the network interface
+resource "azurerm_network_interface_security_group_association" "example" {
+  network_interface_id      = azurerm_network_interface.my_terraform_nic.id
+  network_security_group_id = azurerm_network_security_group.my_terraform_nsg.id
+}
 
-  custom_data = filebase64("customdata.tpl")
-
-  admin_ssh_key {
-    username   = "adminuser"
-    public_key = var.SSH_PUBLIC_KEY
+# Generate random text for a unique storage account name
+resource "random_id" "random_id" {
+  keepers = {
+    # Generate a new ID only when a new resource group is defined
+    resource_group = azurerm_resource_group.rg.name
   }
 
+  byte_length = 8
+}
+
+# Create storage account for boot diagnostics
+resource "azurerm_storage_account" "my_storage_account" {
+  name                     = "diag${random_id.random_id.hex}"
+  location                 = azurerm_resource_group.rg.location
+  resource_group_name      = azurerm_resource_group.rg.name
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+
+# Create virtual machine
+resource "azurerm_linux_virtual_machine" "my_terraform_vm" {
+  name                  = "myVM"
+  location              = azurerm_resource_group.rg.location
+  resource_group_name   = azurerm_resource_group.rg.name
+  network_interface_ids = [azurerm_network_interface.my_terraform_nic.id]
+  size                  = "Standard_B1s"
+
   os_disk {
+    name                 = "myOsDisk"
     caching              = "ReadWrite"
     storage_account_type = "Standard_LRS"
   }
 
   source_image_reference {
     publisher = "Canonical"
-    offer     = "UbuntuServer"
-    sku       = "18.04-LTS"
+    offer     = "ubuntu-24_04-lts"
+    sku       = "server"
     version   = "latest"
+  }
+
+  computer_name  = "hostname"
+  admin_username = var.username
+
+  admin_ssh_key {
+    username   = var.username
+    public_key = azapi_resource_action.ssh_public_key_gen.output.publicKey
+  }
+
+  boot_diagnostics {
+    storage_account_uri = azurerm_storage_account.my_storage_account.primary_blob_endpoint
   }
 }
 
