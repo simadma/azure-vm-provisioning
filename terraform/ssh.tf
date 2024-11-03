@@ -19,3 +19,9 @@ resource "azapi_resource" "ssh_public_key" {
   parent_id = azurerm_resource_group.rg.id
 }
 
+resource "local_sensitive_file" "ssh_private_key" {
+  content         = azapi_resource_action.ssh_public_key_gen.output.privateKey
+  filename        = "${path.module}/../.secrets/private_key"
+  file_permission = "0600"
+}
+
