@@ -1,36 +1,41 @@
 # Azure VM Setup with Terraform
 
-This repository contains Terraform configuration files for setting up a Virtual
-Machine (VM) in Microsoft Azure.
-
-## Files Overview
-
-- `main.tf`: The main Terraform configuration file that defines the resources
-to be created.
-- `outputs.tf`: Contains output definitions for the Terraform deployment.
-- `ssh.tf`: Manages the generation of SSH keys.
-- `variables.tf`: Defines the input variables for the Terraform configuration.
-- `providers.tf`: Specifies the required providers for the Terraform
-configuration.
-- `.terraform.lock.hcl`: Lock file for Terraform providers.
+This repository contains configuration files to set up a Virtual Machine (VM) in Microsoft Azure using Terraform and Ansible.
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed:
+Ensure you have the following installed:
 
 - [Terraform](https://developer.hashicorp.com/terraform/install)
 - [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
+- [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html)
 - An Azure account with sufficient permissions to create resources.
 
 ## Usage
 
-Run the following commands to create the resources:
+To create and provision the VM, run:
 
 ```bash
-az login  # Log in to your Azure account and choose the subscription
-
-cd terraform  # Change to the Terraform configuration directory
-terraform init  # Initialize the Terraform configuration
-terraform plan -out main.tfplan  # Create an execution plan
-terraform apply main.tfplan  # Apply the execution plan
+make
 ```
+
+This command will initialize Terraform, apply the configuration, fetch necessary
+outputs, and provision the VM using Ansible.
+
+To SSH into the VM, run:
+
+```bash
+ssh -i .secrets/private_key \
+  azureadmin@$(terraform -chdir=terraform output -raw public_ip_address)
+```
+
+## Individual Commands
+
+- Initialize Terraform: `make init`
+- Apply Terraform Configuration: `make apply`
+- Provision VM: `make provision`
+- Destroy Resources: `make destroy`
+
+## Notes
+
+Ensure you're logged into Azure CLI before running the `make` commands.
