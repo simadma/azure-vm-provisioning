@@ -29,6 +29,7 @@ Run the following commands to create the resources:
 ```bash
 az login  # Log in to your Azure account and choose the subscription
 
+cd terraform  # Change to the Terraform configuration directory
 terraform init  # Initialize the Terraform configuration
 terraform plan -out main.tfplan  # Create an execution plan
 terraform apply main.tfplan  # Apply the execution plan
